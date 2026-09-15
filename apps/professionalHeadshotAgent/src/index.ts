@@ -27,6 +27,8 @@ const headshotAttireSchema = z.enum([
   "techProfessional",
   "academic",
 ]);
+// Default preserves compatibility while the app and Lambda roll out separately.
+const deliveryModeSchema = z.enum(["cached", "transient"]).default("cached");
 
 const generateProfessionalHeadshotSchema = z.object({
   userId: z.string().uuid(),
@@ -35,6 +37,7 @@ const generateProfessionalHeadshotSchema = z.object({
   backgroundUrl: z.string().optional(),
   attire: headshotAttireSchema,
   layout: headshotSizeSchema,
+  deliveryMode: deliveryModeSchema,
 });
 
 const reviseProfessionalHeadshotSchema = z.object({
@@ -42,6 +45,7 @@ const reviseProfessionalHeadshotSchema = z.object({
   headshotUrl: z.string(),
   feedback: z.string(),
   layout: headshotSizeSchema,
+  deliveryMode: deliveryModeSchema,
 });
 
 function jsonResponse(statusCode: number, body: unknown) {

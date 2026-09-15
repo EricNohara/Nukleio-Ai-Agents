@@ -32,6 +32,18 @@ export async function uploadHeadshotToSupabase(
     throw new Error("Account is not available for headshot upload");
   }
 
+  const reservation = await supabase.rpc("reserve_storage_upload", {
+    p_user_id: userId,
+    p_bucket: bucket,
+    p_object_path: objectPath,
+    p_category: "ai_cache",
+    p_byte_size: imageBuffer.length,
+    p_is_premium: true,
+  });
+  if (reservation.error || !reservation.data) {
+    throw new Error(reservation.error?.message ?? "Unable to reserve headshot storage");
+  }
+
   const { error } = await supabase.storage
     .from(bucket)
     .upload(objectPath, imageBuffer, {
@@ -40,8 +52,16 @@ export async function uploadHeadshotToSupabase(
     });
 
   if (error) {
+    await supabase.from("storage_quota_ledger").delete().eq("id", reservation.data);
     console.error("Supabase upload error:", error);
     return null;
+  }
+
+  const finalized = await supabase.rpc("finalize_storage_upload", { p_id: reservation.data });
+  if (finalized.error) {
+    await supabase.storage.from(bucket).remove([objectPath]);
+    await supabase.from("storage_quota_ledger").delete().eq("id", reservation.data);
+    throw new Error(finalized.error.message);
   }
 
   try {
@@ -56,6 +76,7 @@ export async function uploadHeadshotToSupabase(
     if (cleanupError) {
       console.error("Unable to roll back headshot upload:", cleanupError);
     }
+    await supabase.from("storage_quota_ledger").delete().eq("id", reservation.data);
     throw accountStatusError;
   }
 
