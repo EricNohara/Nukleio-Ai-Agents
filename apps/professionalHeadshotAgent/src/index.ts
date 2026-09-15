@@ -27,6 +27,7 @@ const headshotAttireSchema = z.enum([
   "techProfessional",
   "academic",
 ]);
+const deliveryModeSchema = z.enum(["cached", "transient"]);
 
 const generateProfessionalHeadshotSchema = z.object({
   userId: z.string().uuid(),
@@ -35,6 +36,7 @@ const generateProfessionalHeadshotSchema = z.object({
   backgroundUrl: z.string().optional(),
   attire: headshotAttireSchema,
   layout: headshotSizeSchema,
+  deliveryMode: deliveryModeSchema,
 });
 
 const reviseProfessionalHeadshotSchema = z.object({
@@ -42,6 +44,7 @@ const reviseProfessionalHeadshotSchema = z.object({
   headshotUrl: z.string(),
   feedback: z.string(),
   layout: headshotSizeSchema,
+  deliveryMode: deliveryModeSchema,
 });
 
 function jsonResponse(statusCode: number, body: unknown) {

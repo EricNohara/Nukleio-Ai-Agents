@@ -11,6 +11,7 @@ import { uploadHeadshotToSupabase } from "./utils/uploadHeadshotToSupabase";
 import { reviseProfessionalHeadshotAgent } from "./agents/reviseProfessionalHeadshotAgent";
 
 const openAIClient = getOpenAIClient();
+const MAX_HEADSHOT_BYTES = 1024 * 1024;
 
 export async function runPipeline({
   userId,
@@ -19,6 +20,7 @@ export async function runPipeline({
   backgroundUrl,
   attire,
   layout,
+  deliveryMode,
 }: {
   userId: string;
   referenceUrl: string;
@@ -26,6 +28,7 @@ export async function runPipeline({
   backgroundUrl?: string | undefined;
   attire: HeadshotAttire;
   layout: "1024x1024" | "1536x1024" | "1024x1536" | "auto";
+  deliveryMode: "cached" | "transient";
 }) {
   // validate the reference image
   const validation: ReferencePhotoValidationResult =
@@ -63,6 +66,13 @@ export async function runPipeline({
   }
 
   const imageBuffer = Buffer.from(b64Image, "base64");
+  if (imageBuffer.length > MAX_HEADSHOT_BYTES) {
+    throw new Error("Generated headshot exceeds the 1 MB storage limit");
+  }
+
+  if (deliveryMode === "transient") {
+    return { success: true, imageBase64: b64Image, contentType: "image/jpeg", validation };
+  }
 
   const publicUrl = await uploadHeadshotToSupabase(imageBuffer, {
     userId,
@@ -82,11 +92,13 @@ export async function runRevisionPipeline({
   headshotUrl,
   feedback,
   layout,
+  deliveryMode,
 }: {
   userId: string;
   headshotUrl: string;
   feedback: string;
   layout: "1024x1024" | "1536x1024" | "1024x1536" | "auto";
+  deliveryMode: "cached" | "transient";
 }) {
   // validate the reference image
   const validation: ReferencePhotoValidationResult =
@@ -122,6 +134,13 @@ export async function runRevisionPipeline({
   }
 
   const imageBuffer = Buffer.from(b64Image, "base64");
+  if (imageBuffer.length > MAX_HEADSHOT_BYTES) {
+    throw new Error("Generated headshot exceeds the 1 MB storage limit");
+  }
+
+  if (deliveryMode === "transient") {
+    return { success: true, imageBase64: b64Image, contentType: "image/jpeg", validation };
+  }
 
   const publicUrl = await uploadHeadshotToSupabase(imageBuffer, {
     userId,

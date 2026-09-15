@@ -6,6 +6,7 @@ import { enhanceResumeUserInfoAgent } from "./agents/enhanceResumeUserInfoAgent"
 import { UserInfo } from "./types/userInfo";
 
 const openAIClient = getOpenAIClient();
+const MAX_RESUME_BYTES = 1024 * 1024;
 
 function makeSafePrefix(name: string): string {
   const cleaned = name
@@ -20,15 +21,23 @@ function makeSafePrefix(name: string): string {
 async function generateResumeFromUserInfoAndTemplate(
   userId: string,
   userInfo: UserInfo,
-  templateId?: string | undefined
+  templateId?: string | undefined,
+  deliveryMode: "cached" | "transient" = "cached",
 ) {
   //   render the resume as HTML
   const html = renderResumeHtml(userInfo, templateId);
 
   //   render the HTML resume as a PDF
   const pdfBuffer = await renderResumePdf(html);
+  if (pdfBuffer.length > MAX_RESUME_BYTES) {
+    throw new Error("Generated resume exceeds the 1 MB storage limit");
+  }
 
-  //   upload the resume to supabase and return the public url
+  if (deliveryMode === "transient") {
+    return { pdfBase64: pdfBuffer.toString("base64") };
+  }
+
+  // Upload retained resumes only.
   const safePrefix = makeSafePrefix(userInfo.name ?? userInfo.email);
 
   const resumeUrl = await uploadResumeToSupabase(pdfBuffer, {
@@ -37,35 +46,34 @@ async function generateResumeFromUserInfoAndTemplate(
     contentType: "application/pdf",
   });
 
-  return resumeUrl;
+  return { resumeUrl };
 }
 
 export async function runGeneratePipeline({
   userId,
   userInfo,
   templateId,
+  deliveryMode,
 }: {
   userId: string;
   userInfo: UserInfo;
   templateId?: string | undefined;
-}): Promise<{
-  success: true;
-  resumeUrl: string;
-}> {
-  const resumeUrl = await generateResumeFromUserInfoAndTemplate(
+  deliveryMode: "cached" | "transient";
+}) {
+  const result = await generateResumeFromUserInfoAndTemplate(
     userId,
     userInfo,
-    templateId
+    templateId,
+    deliveryMode,
   );
 
-  if (!resumeUrl) {
+  if ("resumeUrl" in result && !result.resumeUrl) {
     throw new Error("Failed to upload generated resume");
   }
 
-  return {
-    success: true,
-    resumeUrl,
-  };
+  return "pdfBase64" in result
+    ? { success: true as const, pdfBase64: result.pdfBase64, contentType: "application/pdf" }
+    : { success: true as const, resumeUrl: result.resumeUrl };
 }
 
 export async function runGenerateWithAiPipeline({
@@ -73,11 +81,13 @@ export async function runGenerateWithAiPipeline({
   userInfo,
   templateId,
   targetJobs,
+  deliveryMode,
 }: {
   userId: string;
   userInfo: UserInfo;
   templateId?: string | undefined;
   targetJobs?: string[] | undefined;
+  deliveryMode: "cached" | "transient";
 }) {
   // run the enhancement agent
   const resumeEnhancedUserInfo: UserInfo = await enhanceResumeUserInfoAgent(
@@ -87,18 +97,18 @@ export async function runGenerateWithAiPipeline({
   );
 
   // generate the resume
-  const resumeUrl = await generateResumeFromUserInfoAndTemplate(
+  const result = await generateResumeFromUserInfoAndTemplate(
     userId,
     resumeEnhancedUserInfo,
-    templateId
+    templateId,
+    deliveryMode,
   );
 
-  if (!resumeUrl) {
+  if ("resumeUrl" in result && !result.resumeUrl) {
     throw new Error("Failed to upload generated resume");
   }
 
-  return {
-    success: true,
-    resumeUrl,
-  };
+  return "pdfBase64" in result
+    ? { success: true as const, pdfBase64: result.pdfBase64, contentType: "application/pdf" }
+    : { success: true as const, resumeUrl: result.resumeUrl };
 }
