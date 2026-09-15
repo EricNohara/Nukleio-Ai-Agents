@@ -19,7 +19,7 @@ const generateResumeSchema = z.object({
   userId: z.string().uuid(),
   userInfo: userInfoSchema,
   templateId: z.string().optional(),
-  deliveryMode: z.enum(["cached", "transient"]),
+  deliveryMode: z.enum(["cached", "transient"]).default("cached"),
 });
 
 const generateResumeWithAiSchema = z.object({
@@ -27,7 +27,7 @@ const generateResumeWithAiSchema = z.object({
   userInfo: userInfoSchema,
   templateId: z.string().optional(),
   targetJobs: z.array(z.string()).optional(),
-  deliveryMode: z.enum(["cached", "transient"]),
+  deliveryMode: z.enum(["cached", "transient"]).default("cached"),
 });
 
 function jsonResponse(statusCode: number, body: unknown) {

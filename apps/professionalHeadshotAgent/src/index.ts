@@ -27,7 +27,8 @@ const headshotAttireSchema = z.enum([
   "techProfessional",
   "academic",
 ]);
-const deliveryModeSchema = z.enum(["cached", "transient"]);
+// Default preserves compatibility while the app and Lambda roll out separately.
+const deliveryModeSchema = z.enum(["cached", "transient"]).default("cached");
 
 const generateProfessionalHeadshotSchema = z.object({
   userId: z.string().uuid(),
