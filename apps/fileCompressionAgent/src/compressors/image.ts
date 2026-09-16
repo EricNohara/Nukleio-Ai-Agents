@@ -5,12 +5,8 @@ import { MAX_IMAGE_PIXELS, MAX_OUTPUT_BYTES } from "../types";
 const PREFERRED_WEBP_QUALITY = 80;
 const FALLBACK_WEBP_QUALITY = 60;
 const MIN_LONG_EDGE = 512;
-const MAX_DIMENSION_CANDIDATES = 7;
-
-type Candidate = {
-  bytes: Buffer;
-  ssim: number;
-};
+const ESTIMATE_SAFETY_FACTOR = 0.96;
+const MAX_ESTIMATE_CORRECTIONS = 2;
 
 function dimensionsForLongEdge(width: number, height: number, longEdge: number) {
   if (Math.max(width, height) <= longEdge) return { width, height };
@@ -88,18 +84,18 @@ async function encodeCandidate(input: Buffer, width: number, height: number, qua
     .toBuffer();
 }
 
-async function createCandidate(input: {
+async function encodeAtDimensions(input: {
   baseline: Buffer;
   height: number;
   quality: number;
-  referenceThumbnail: Buffer;
   width: number;
-}): Promise<Candidate> {
-  const bytes = await encodeCandidate(input.baseline, input.width, input.height, input.quality);
-  return {
-    bytes,
-    ssim: blockSsim(input.referenceThumbnail, await thumbnail(bytes)),
-  };
+}): Promise<Buffer> {
+  return encodeCandidate(input.baseline, input.width, input.height, input.quality);
+}
+
+function estimatedLongEdge(longest: number, encodedBytes: number): number {
+  const estimate = longest * Math.sqrt(MAX_OUTPUT_BYTES / encodedBytes) * ESTIMATE_SAFETY_FACTOR;
+  return Math.max(MIN_LONG_EDGE, Math.min(longest, Math.floor(estimate)));
 }
 
 export type ImageCompressionResult = {
@@ -131,73 +127,60 @@ export async function compressImage(input: Buffer): Promise<ImageCompressionResu
   const baseline = await sharp(input, { limitInputPixels: MAX_IMAGE_PIXELS })
     .rotate()
     .toBuffer();
-  const referenceThumbnail = await thumbnail(baseline);
-
   // Preserve the source dimensions whenever its WebP representation can fit in
   // storage at a visually acceptable quality. Resize only when the 1 MiB cap
   // requires it; do not apply a blanket thumbnail-sized maximum.
-  const fullSize = await createCandidate({
+  const fullSize = await encodeAtDimensions({
     baseline,
     width: metadata.width,
     height: metadata.height,
     quality: PREFERRED_WEBP_QUALITY,
-    referenceThumbnail,
   });
-  if (fullSize.bytes.byteLength <= MAX_OUTPUT_BYTES) {
+  if (fullSize.byteLength <= MAX_OUTPUT_BYTES) {
     return {
-      bytes: fullSize.bytes,
+      bytes: fullSize,
       originalBytes: input.byteLength,
-      ssim: fullSize.ssim,
+      ssim: blockSsim(await thumbnail(baseline), await thumbnail(fullSize)),
       status: "compressed",
     };
   }
 
   const longest = Math.max(metadata.width, metadata.height);
-  const minimumLongEdge = Math.min(MIN_LONG_EDGE, longest);
-  const minimum = dimensionsForLongEdge(metadata.width, metadata.height, minimumLongEdge);
-  let best = await createCandidate({
-    baseline,
-    width: minimum.width,
-    height: minimum.height,
-    quality: PREFERRED_WEBP_QUALITY,
-    referenceThumbnail,
-  });
-
-  if (best.bytes.byteLength > MAX_OUTPUT_BYTES) {
-    best = await createCandidate({
-      baseline,
-      width: minimum.width,
-      height: minimum.height,
-      quality: FALLBACK_WEBP_QUALITY,
-      referenceThumbnail,
-    });
-    if (best.bytes.byteLength > MAX_OUTPUT_BYTES) throw new ImageCannotFitError();
-  }
-
-  let low = minimumLongEdge;
-  let high = longest;
-  for (let attempt = 0; attempt < MAX_DIMENSION_CANDIDATES && low < high; attempt += 1) {
-    const edge = Math.ceil((low + high) / 2);
+  let edge = estimatedLongEdge(longest, fullSize.byteLength);
+  let best: Buffer | null = null;
+  for (let attempt = 0; attempt <= MAX_ESTIMATE_CORRECTIONS; attempt += 1) {
     const dimensions = dimensionsForLongEdge(metadata.width, metadata.height, edge);
-    const candidate = await createCandidate({
+    const candidate = await encodeAtDimensions({
       baseline,
       width: dimensions.width,
       height: dimensions.height,
       quality: PREFERRED_WEBP_QUALITY,
-      referenceThumbnail,
     });
-    if (candidate.bytes.byteLength <= MAX_OUTPUT_BYTES) {
+    if (candidate.byteLength <= MAX_OUTPUT_BYTES) {
       best = candidate;
-      low = edge;
-    } else {
-      high = edge - 1;
+      break;
     }
+    const nextEdge = estimatedLongEdge(edge, candidate.byteLength);
+    if (nextEdge >= edge || edge === MIN_LONG_EDGE) break;
+    edge = nextEdge;
+  }
+
+  if (!best) {
+    const minimum = dimensionsForLongEdge(metadata.width, metadata.height, Math.min(MIN_LONG_EDGE, longest));
+    const fallback = await encodeAtDimensions({
+      baseline,
+      width: minimum.width,
+      height: minimum.height,
+      quality: FALLBACK_WEBP_QUALITY,
+    });
+    if (fallback.byteLength > MAX_OUTPUT_BYTES) throw new ImageCannotFitError();
+    best = fallback;
   }
 
   return {
-    bytes: best.bytes,
+    bytes: best,
     originalBytes: input.byteLength,
-    ssim: best.ssim,
+    ssim: blockSsim(await thumbnail(baseline), await thumbnail(best)),
     status: "compressed",
   };
 }
