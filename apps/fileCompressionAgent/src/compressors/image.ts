@@ -5,6 +5,7 @@ import { MAX_IMAGE_PIXELS, MAX_OUTPUT_BYTES } from "../types";
 const PREFERRED_WEBP_QUALITY = 80;
 const FALLBACK_WEBP_QUALITY = 60;
 const MIN_LONG_EDGE = 512;
+const PROBE_LONG_EDGE = 2048;
 const ESTIMATE_SAFETY_FACTOR = 0.96;
 const MAX_ESTIMATE_CORRECTIONS = 2;
 
@@ -93,9 +94,9 @@ async function encodeAtDimensions(input: {
   return encodeCandidate(input.baseline, input.width, input.height, input.quality);
 }
 
-function estimatedLongEdge(longest: number, encodedBytes: number): number {
-  const estimate = longest * Math.sqrt(MAX_OUTPUT_BYTES / encodedBytes) * ESTIMATE_SAFETY_FACTOR;
-  return Math.max(MIN_LONG_EDGE, Math.min(longest, Math.floor(estimate)));
+function estimatedLongEdge(referenceLongEdge: number, encodedBytes: number, maxLongEdge = referenceLongEdge): number {
+  const estimate = referenceLongEdge * Math.sqrt(MAX_OUTPUT_BYTES / encodedBytes) * ESTIMATE_SAFETY_FACTOR;
+  return Math.max(MIN_LONG_EDGE, Math.min(maxLongEdge, Math.floor(estimate)));
 }
 
 export type ImageCompressionResult = {
@@ -127,16 +128,15 @@ export async function compressImage(input: Buffer): Promise<ImageCompressionResu
   const baseline = await sharp(input, { limitInputPixels: MAX_IMAGE_PIXELS })
     .rotate()
     .toBuffer();
-  // Preserve the source dimensions whenever its WebP representation can fit in
-  // storage at a visually acceptable quality. Resize only when the 1 MiB cap
-  // requires it; do not apply a blanket thumbnail-sized maximum.
-  const fullSize = await encodeAtDimensions({
-    baseline,
-    width: metadata.width,
-    height: metadata.height,
-    quality: PREFERRED_WEBP_QUALITY,
-  });
-  if (fullSize.byteLength <= MAX_OUTPUT_BYTES) {
+  const longest = Math.max(metadata.width, metadata.height);
+  if (longest <= PROBE_LONG_EDGE) {
+    const fullSize = await encodeAtDimensions({
+      baseline,
+      width: metadata.width,
+      height: metadata.height,
+      quality: PREFERRED_WEBP_QUALITY,
+    });
+    if (fullSize.byteLength > MAX_OUTPUT_BYTES) throw new ImageCannotFitError();
     return {
       bytes: fullSize,
       originalBytes: input.byteLength,
@@ -145,8 +145,17 @@ export async function compressImage(input: Buffer): Promise<ImageCompressionResu
     };
   }
 
-  const longest = Math.max(metadata.width, metadata.height);
-  let edge = estimatedLongEdge(longest, fullSize.byteLength);
+  // A 2,048px WebP is only a fast size probe, never a final-resolution cap.
+  // It avoids first encoding the entire source image just to learn it exceeds
+  // 1 MiB, then estimates the final dimensions from the probe's byte size.
+  const probeDimensions = dimensionsForLongEdge(metadata.width, metadata.height, PROBE_LONG_EDGE);
+  const probe = await encodeAtDimensions({
+    baseline,
+    width: probeDimensions.width,
+    height: probeDimensions.height,
+    quality: PREFERRED_WEBP_QUALITY,
+  });
+  let edge = estimatedLongEdge(PROBE_LONG_EDGE, probe.byteLength, longest);
   let best: Buffer | null = null;
   for (let attempt = 0; attempt <= MAX_ESTIMATE_CORRECTIONS; attempt += 1) {
     const dimensions = dimensionsForLongEdge(metadata.width, metadata.height, edge);
