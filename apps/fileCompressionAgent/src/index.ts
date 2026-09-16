@@ -2,7 +2,7 @@ import type { APIGatewayProxyHandlerV2 } from "aws-lambda";
 import { z } from "zod";
 
 import { ImageCannotFitError, compressImage } from "./compressors/image";
-import { PdfCannotFitError, compressPdf } from "./compressors/pdf";
+import { PdfCannotFitError, PdfEncryptedError, compressPdf } from "./compressors/pdf";
 import { acceptsContentType, MAX_OUTPUT_BYTES, mediaKinds } from "./types";
 import { prepareStagedUpload, readAndDeleteStagedSource } from "./utils/staging";
 import {
@@ -115,6 +115,9 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     }
     if (error instanceof PdfCannotFitError) {
       return compressionFailure("pdf_quality_floor", error.message);
+    }
+    if (error instanceof PdfEncryptedError) {
+      return compressionFailure("encrypted_pdf", error.message);
     }
     if (error instanceof z.ZodError || error instanceof SyntaxError) {
       return jsonResponse(400, { success: false, error: "Invalid request body" });
