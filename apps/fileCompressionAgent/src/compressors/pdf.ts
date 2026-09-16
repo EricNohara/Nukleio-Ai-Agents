@@ -22,8 +22,21 @@ export class PdfCannotFitError extends Error {
   }
 }
 
+export class PdfEncryptedError extends Error {
+  constructor() {
+    super("This PDF is encrypted and cannot be optimized. Upload an unencrypted copy or use an external HTTPS link.");
+    this.name = "PdfEncryptedError";
+  }
+}
+
 async function safeOptimize(input: Buffer): Promise<Buffer> {
-  const document = await PDFDocument.load(input, { updateMetadata: false });
+  let document: PDFDocument;
+  try {
+    document = await PDFDocument.load(input, { updateMetadata: false });
+  } catch (error) {
+    if (String(error).toLowerCase().includes("encrypted")) throw new PdfEncryptedError();
+    throw error;
+  }
   const saved = await document.save({ useObjectStreams: true, addDefaultPage: false, updateFieldAppearances: false });
   return Buffer.from(saved);
 }
