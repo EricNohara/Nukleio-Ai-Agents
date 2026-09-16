@@ -9,6 +9,7 @@ import {
 import getOpenAIClient from "./utils/getOpenAIClient";
 import { uploadHeadshotToSupabase } from "./utils/uploadHeadshotToSupabase";
 import { reviseProfessionalHeadshotAgent } from "./agents/reviseProfessionalHeadshotAgent";
+import { compressGeneratedHeadshot } from "./utils/compressWithFileAgent";
 
 const openAIClient = getOpenAIClient();
 const MAX_HEADSHOT_BYTES = 1024 * 1024;
@@ -66,17 +67,18 @@ export async function runPipeline({
   }
 
   const imageBuffer = Buffer.from(b64Image, "base64");
-  if (imageBuffer.length > MAX_HEADSHOT_BYTES) {
-    throw new Error("Generated headshot exceeds the 1 MB storage limit");
-  }
-
   if (deliveryMode === "transient") {
     return { success: true, imageBase64: b64Image, contentType: "image/jpeg", validation };
   }
 
-  const publicUrl = await uploadHeadshotToSupabase(imageBuffer, {
+  const compressedHeadshot = await compressGeneratedHeadshot(imageBuffer);
+  if (compressedHeadshot.bytes.length > MAX_HEADSHOT_BYTES) {
+    throw new Error("Generated headshot exceeds the 1 MB storage limit after compression");
+  }
+
+  const publicUrl = await uploadHeadshotToSupabase(compressedHeadshot.bytes, {
     userId,
-    contentType: "image/jpeg",
+    contentType: compressedHeadshot.contentType,
   });
 
   // return the public url
@@ -134,17 +136,18 @@ export async function runRevisionPipeline({
   }
 
   const imageBuffer = Buffer.from(b64Image, "base64");
-  if (imageBuffer.length > MAX_HEADSHOT_BYTES) {
-    throw new Error("Generated headshot exceeds the 1 MB storage limit");
-  }
-
   if (deliveryMode === "transient") {
     return { success: true, imageBase64: b64Image, contentType: "image/jpeg", validation };
   }
 
-  const publicUrl = await uploadHeadshotToSupabase(imageBuffer, {
+  const compressedHeadshot = await compressGeneratedHeadshot(imageBuffer);
+  if (compressedHeadshot.bytes.length > MAX_HEADSHOT_BYTES) {
+    throw new Error("Generated headshot exceeds the 1 MB storage limit after compression");
+  }
+
+  const publicUrl = await uploadHeadshotToSupabase(compressedHeadshot.bytes, {
     userId,
-    contentType: "image/jpeg",
+    contentType: compressedHeadshot.contentType,
   });
 
   // return the public url

@@ -22,6 +22,10 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "@aws-crypto/sha256-js": "^5.2.0",
+    "@aws-sdk/credential-provider-node": "^3.927.0",
+    "@smithy/protocol-http": "^5.6.2",
+    "@smithy/signature-v4": "^5.7.3",
     "@supabase/supabase-js": "^2.98.0",
     "dotenv": "^17.4.2",
     "openai": "^6.9.1",
