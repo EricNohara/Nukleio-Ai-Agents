@@ -4,6 +4,7 @@ import { uploadResumeToSupabase } from "./utils/uploadResumeToSupabase";
 import getOpenAIClient from "./utils/getOpenAIClient";
 import { enhanceResumeUserInfoAgent } from "./agents/enhanceResumeUserInfoAgent";
 import { UserInfo } from "./types/userInfo";
+import { compressGeneratedResume } from "./utils/compressWithFileAgent";
 
 const openAIClient = getOpenAIClient();
 const MAX_RESUME_BYTES = 1024 * 1024;
@@ -29,18 +30,19 @@ async function generateResumeFromUserInfoAndTemplate(
 
   //   render the HTML resume as a PDF
   const pdfBuffer = await renderResumePdf(html);
-  if (pdfBuffer.length > MAX_RESUME_BYTES) {
-    throw new Error("Generated resume exceeds the 1 MB storage limit");
-  }
-
   if (deliveryMode === "transient") {
     return { pdfBase64: pdfBuffer.toString("base64") };
+  }
+
+  const compressedResume = await compressGeneratedResume(pdfBuffer);
+  if (compressedResume.length > MAX_RESUME_BYTES) {
+    throw new Error("Generated resume exceeds the 1 MB storage limit after compression");
   }
 
   // Upload retained resumes only.
   const safePrefix = makeSafePrefix(userInfo.name ?? userInfo.email);
 
-  const resumeUrl = await uploadResumeToSupabase(pdfBuffer, {
+  const resumeUrl = await uploadResumeToSupabase(compressedResume, {
     userId,
     fileNamePrefix: `${safePrefix}-resume`,
     contentType: "application/pdf",

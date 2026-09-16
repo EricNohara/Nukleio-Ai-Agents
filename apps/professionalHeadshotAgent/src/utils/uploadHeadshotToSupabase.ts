@@ -7,6 +7,10 @@ function makeFileName(prefix: string, extension: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${extension}`;
 }
 
+function extensionForContentType(contentType: string) {
+  return contentType === "image/webp" ? "webp" : "jpg";
+}
+
 export async function uploadHeadshotToSupabase(
   imageBuffer: Buffer,
   options: {
@@ -25,7 +29,7 @@ export async function uploadHeadshotToSupabase(
 
   const contentType = options.contentType ?? "image/jpeg";
 
-  const fileName = makeFileName("headshot", "jpg");
+  const fileName = makeFileName("headshot", extensionForContentType(contentType));
   const objectPath = `generated/${userId}/${fileName}`;
 
   if (!await isAccountActive(userId)) {
