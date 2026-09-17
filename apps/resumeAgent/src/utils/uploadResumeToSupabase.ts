@@ -5,6 +5,23 @@ function makeFileName(prefix: string, extension: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${extension}`;
 }
 
+async function removeUploadedResume(
+  supabase: ReturnType<typeof getSupabaseClient>,
+  bucket: string,
+  objectPath: string,
+  reservationId: string,
+) {
+  const { error } = await supabase.storage.from(bucket).remove([objectPath]);
+  if (!error) {
+    await supabase.from("storage_quota_ledger").delete().eq("id", reservationId);
+    return;
+  }
+  console.error("Unable to remove uploaded resume:", error);
+  const { data } = supabase.storage.from(bucket).getPublicUrl(objectPath);
+  const queued = await supabase.from("storage_deletion_queue").insert({ object_url: data.publicUrl });
+  if (queued.error) console.error("Unable to queue uploaded resume cleanup:", queued.error);
+}
+
 export async function uploadResumeToSupabase(
   pdfBuffer: Buffer,
   options: {
@@ -54,8 +71,7 @@ export async function uploadResumeToSupabase(
 
   const finalized = await supabase.rpc("finalize_storage_upload", { p_id: reservation.data });
   if (finalized.error) {
-    await supabase.storage.from(bucket).remove([objectPath]);
-    await supabase.from("storage_quota_ledger").delete().eq("id", reservation.data);
+    await removeUploadedResume(supabase, bucket, objectPath, reservation.data);
     throw new Error(finalized.error.message);
   }
 
@@ -64,14 +80,7 @@ export async function uploadResumeToSupabase(
       throw new Error("Account is not available for resume upload");
     }
   } catch (accountStatusError) {
-    const { error: cleanupError } = await supabase.storage
-      .from(bucket)
-      .remove([objectPath]);
-
-    if (cleanupError) {
-      console.error("Unable to roll back resume upload:", cleanupError);
-    }
-    await supabase.from("storage_quota_ledger").delete().eq("id", reservation.data);
+    await removeUploadedResume(supabase, bucket, objectPath, reservation.data);
     throw accountStatusError;
   }
 

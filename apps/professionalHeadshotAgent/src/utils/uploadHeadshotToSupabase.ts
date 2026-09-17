@@ -11,6 +11,23 @@ function extensionForContentType(contentType: string) {
   return contentType === "image/webp" ? "webp" : "jpg";
 }
 
+async function removeUploadedHeadshot(
+  supabase: ReturnType<typeof getSupabaseClient>,
+  bucket: string,
+  objectPath: string,
+  reservationId: string,
+) {
+  const { error } = await supabase.storage.from(bucket).remove([objectPath]);
+  if (!error) {
+    await supabase.from("storage_quota_ledger").delete().eq("id", reservationId);
+    return;
+  }
+  console.error("Unable to remove uploaded headshot:", error);
+  const { data } = supabase.storage.from(bucket).getPublicUrl(objectPath);
+  const queued = await supabase.from("storage_deletion_queue").insert({ object_url: data.publicUrl });
+  if (queued.error) console.error("Unable to queue uploaded headshot cleanup:", queued.error);
+}
+
 export async function uploadHeadshotToSupabase(
   imageBuffer: Buffer,
   options: {
@@ -63,8 +80,7 @@ export async function uploadHeadshotToSupabase(
 
   const finalized = await supabase.rpc("finalize_storage_upload", { p_id: reservation.data });
   if (finalized.error) {
-    await supabase.storage.from(bucket).remove([objectPath]);
-    await supabase.from("storage_quota_ledger").delete().eq("id", reservation.data);
+    await removeUploadedHeadshot(supabase, bucket, objectPath, reservation.data);
     throw new Error(finalized.error.message);
   }
 
@@ -73,14 +89,7 @@ export async function uploadHeadshotToSupabase(
       throw new Error("Account is not available for headshot upload");
     }
   } catch (accountStatusError) {
-    const { error: cleanupError } = await supabase.storage
-      .from(bucket)
-      .remove([objectPath]);
-
-    if (cleanupError) {
-      console.error("Unable to roll back headshot upload:", cleanupError);
-    }
-    await supabase.from("storage_quota_ledger").delete().eq("id", reservation.data);
+    await removeUploadedHeadshot(supabase, bucket, objectPath, reservation.data);
     throw accountStatusError;
   }
 
