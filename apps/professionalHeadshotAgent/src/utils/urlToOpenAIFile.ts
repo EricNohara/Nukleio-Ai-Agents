@@ -6,7 +6,9 @@ export async function urlToOpenAIFile(url: string, filename: string) {
     responseType: "arraybuffer",
   });
 
-  const contentType = response.headers["content-type"] ?? "image/png";
+  const contentTypeHeader = response.headers["content-type"];
+  const contentType =
+    typeof contentTypeHeader === "string" ? contentTypeHeader : "image/png";
   const buffer = Buffer.from(response.data);
 
   return toFile(buffer, filename, { type: contentType });

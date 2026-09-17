@@ -1,11 +1,11 @@
 import { IObjectiveEvaluationResult } from "../../interfaces/IEvaluator";
-import { IJobInfo } from "../../interfaces/IJobInfo";
-import { IUserInfo } from "../../interfaces/IUserInfoResponse";
+import { JobInfo } from "../../types/jobInfo";
+import { UserInfo } from "../../types/userInfo";
 
 export async function objectiveEvaluator(
   draft: string,
-  userData: IUserInfo,
-  jobData: IJobInfo,
+  userInfo: UserInfo,
+  jobData: JobInfo,
 ): Promise<IObjectiveEvaluationResult> {
   const issues: string[] = [];
 
@@ -103,17 +103,19 @@ export async function objectiveEvaluator(
   // - "Sincerely," (with optional trailing spaces)
   // - 2 to 4 blank lines (newline groups)
   // - then the exact username (case-insensitive)
-  const closingRegex = new RegExp(
-    `Sincerely,\\s*(?:\\n\\s*){2,4}${userData.name.replace(
-      /[.*+?^${}()|[\\]\\\\]/g,
-      "\\$&",
-    )}`,
-    "i",
-  );
+  const closingRegex = userInfo.name
+    ? new RegExp(
+        `Sincerely,\\s*(?:\\n\\s*){2,4}${userInfo.name.replace(
+          /[.*+?^${}()|[\]\\]/g,
+          "\\$&",
+        )}`,
+        "i",
+      )
+    : null;
 
-  if (!closingRegex.test(normalized)) {
+  if (closingRegex && !closingRegex.test(normalized)) {
     issues.push(
-      `Closing format incorrect. Must be "Sincerely," followed by 2 - 4 blank lines, then "${userData.name}".`,
+      `Closing format incorrect. Must be "Sincerely," followed by 2 - 4 blank lines, then "${userInfo.name}".`,
     );
   }
 

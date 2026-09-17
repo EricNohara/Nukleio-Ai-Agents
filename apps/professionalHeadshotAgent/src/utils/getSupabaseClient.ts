@@ -2,15 +2,21 @@ import { createClient } from "@supabase/supabase-js";
 
 export default function getSupabaseClient() {
   const supabaseUrl = process.env.SUPABASE_URL;
-  const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY;
 
   if (!supabaseUrl) {
     throw new Error("Missing SUPABASE_URL");
   }
 
-  if (!supabaseServiceRoleKey) {
+  if (!supabaseSecretKey) {
     throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY");
   }
 
-  return createClient(supabaseUrl, supabaseServiceRoleKey);
+  return createClient(supabaseUrl, supabaseSecretKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+      detectSessionInUrl: false,
+    },
+  });
 }

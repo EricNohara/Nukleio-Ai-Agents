@@ -1,7 +1,7 @@
 import OpenAI from "openai";
-import { WritingAnalysis } from "../utils/writing/writingSchema";
-import { IUserInfo } from "../interfaces/IUserInfoResponse";
-import { IJobInfo } from "../interfaces/IJobInfo";
+import { WritingAnalysis } from "../types/writingAnalysis";
+import { UserInfo } from "../types/userInfo";
+import { JobInfo } from "../types/jobInfo";
 
 function generatePrompt(writingAnalysis: WritingAnalysis | null) {
   return `
@@ -32,14 +32,14 @@ ${writingAnalysis ? "- Match the writing style to the WRITING_SAMPLE and WRITING
 }
 
 function buildDataMessage(
-  userData: IUserInfo,
-  jobData: IJobInfo,
+  userInfo: UserInfo,
+  jobData: JobInfo,
   writingAnalysis: WritingAnalysis | null,
   writingSample?: string,
 ) {
   return [
     "USER_DATA:",
-    JSON.stringify(userData, null, 2),
+    JSON.stringify(userInfo, null, 2),
     "",
     "JOB_DATA:",
     JSON.stringify(jobData, null, 2),
@@ -54,8 +54,8 @@ function buildDataMessage(
 
 export default async function firstDraftAgent(
   clientOpenAI: OpenAI,
-  userData: IUserInfo,
-  jobData: IJobInfo,
+  userInfo: UserInfo,
+  jobData: JobInfo,
   writingAnalysis: WritingAnalysis | null,
   writingSample?: string,
 ): Promise<string> {
@@ -78,7 +78,7 @@ export default async function firstDraftAgent(
           {
             type: "input_text",
             text: buildDataMessage(
-              userData,
+              userInfo,
               jobData,
               writingAnalysis,
               writingSample,

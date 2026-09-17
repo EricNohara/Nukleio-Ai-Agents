@@ -1,11 +1,13 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { getResumeTemplate } from "./getResumeTemplate";
-import { IUserInfo } from "../interfaces/IUserInfoResponse";
+import { UserInfo } from "../types/userInfo";
 
 export function renderResumeHtml(
-  userInfo: IUserInfo,
-  templateId?: string,
+  userInfo: UserInfo,
+  templateId?: string
 ): string {
   const Template = getResumeTemplate(templateId);
-  return "<!DOCTYPE html>" + renderToStaticMarkup(<Template userInfo={userInfo} />);
+  return (
+    "<!DOCTYPE html>" + renderToStaticMarkup(<Template userInfo={userInfo} />)
+  );
 }

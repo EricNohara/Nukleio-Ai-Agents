@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 import { z } from "zod";
-import { IUserInfo } from "../interfaces/IUserInfoResponse";
+import { UserInfo } from "../types/userInfo";
 
 type ResumeSelectionLimits = {
   maxSkills?: number;
@@ -50,7 +50,7 @@ const llmOutputSchema = z.object({
         company: z.string(),
         job_title: z.string(),
         job_description: z.string(),
-      }),
+      })
     )
     .max(DEFAULT_LIMITS.maxExperiences),
   projects: z
@@ -58,7 +58,7 @@ const llmOutputSchema = z.object({
       z.object({
         name: z.string(),
         description: z.string(),
-      }),
+      })
     )
     .max(DEFAULT_LIMITS.maxProjects),
   education: z
@@ -67,7 +67,7 @@ const llmOutputSchema = z.object({
         degree: z.string(),
         institution: z.string(),
         courses: z.array(z.string()).max(DEFAULT_LIMITS.maxCoursesPerEducation),
-      }),
+      })
     )
     .max(DEFAULT_LIMITS.maxEducations),
 });
@@ -88,7 +88,7 @@ function enforceHardLimits(data: LLMOutput): LLMOutput {
   };
 }
 
-function toLLMInput(userInfo: IUserInfo): LLMInput {
+function toLLMInput(userInfo: UserInfo): LLMInput {
   return {
     skills: userInfo.skills.map((skill) => skill.name),
     experiences: userInfo.experiences.map((experience) => ({
@@ -103,7 +103,7 @@ function toLLMInput(userInfo: IUserInfo): LLMInput {
           ...(project.languages_used ?? []),
           ...(project.frameworks_used ?? []),
           ...(project.technologies_used ?? []),
-        ]),
+        ])
       ),
       description: project.description,
     })),
@@ -114,7 +114,7 @@ function toLLMInput(userInfo: IUserInfo): LLMInput {
       institution: education.institution,
       courses: education.courses.map((course) => ({
         name: course.name,
-        description: course.description,
+        description: course.description ?? null,
       })),
     })),
   };
@@ -159,12 +159,12 @@ ${JSON.stringify(userInfo)}
 }
 
 function reattachSkills(
-  original: IUserInfo["skills"],
-  selected: LLMOutput["skills"],
-): IUserInfo["skills"] {
+  original: UserInfo["skills"],
+  selected: LLMOutput["skills"]
+): UserInfo["skills"] {
   return selected.map((skill) => {
     const match = original.find(
-      (originalSkill) => originalSkill.name === skill,
+      (originalSkill) => originalSkill.name === skill
     );
 
     if (!match) {
@@ -172,7 +172,6 @@ function reattachSkills(
     }
 
     return {
-      id: match.id,
       name: match.name,
       proficiency: match.proficiency,
       years_of_experience: match.years_of_experience,
@@ -181,24 +180,23 @@ function reattachSkills(
 }
 
 function reattachExperiences(
-  original: IUserInfo["experiences"],
-  selected: LLMOutput["experiences"],
-): IUserInfo["experiences"] {
+  original: UserInfo["experiences"],
+  selected: LLMOutput["experiences"]
+): UserInfo["experiences"] {
   return selected.map((experience) => {
     const match = original.find(
       (originalExperience) =>
         originalExperience.company === experience.company &&
-        originalExperience.job_title === experience.job_title,
+        originalExperience.job_title === experience.job_title
     );
 
     if (!match) {
       throw new Error(
-        `Failed to reattach experience id for "${experience.company} - ${experience.job_title}"`,
+        `Failed to reattach experience id for "${experience.company} - ${experience.job_title}"`
       );
     }
 
     return {
-      id: match.id,
       company: match.company,
       job_title: match.job_title,
       date_start: match.date_start,
@@ -209,12 +207,12 @@ function reattachExperiences(
 }
 
 function reattachProjects(
-  original: IUserInfo["projects"],
-  selected: LLMOutput["projects"],
-): IUserInfo["projects"] {
+  original: UserInfo["projects"],
+  selected: LLMOutput["projects"]
+): UserInfo["projects"] {
   return selected.map((project) => {
     const match = original.find(
-      (originalProject) => originalProject.name === project.name,
+      (originalProject) => originalProject.name === project.name
     );
 
     if (!match) {
@@ -222,7 +220,6 @@ function reattachProjects(
     }
 
     return {
-      id: match.id,
       name: match.name,
       date_start: match.date_start,
       date_end: match.date_end,
@@ -237,35 +234,34 @@ function reattachProjects(
 }
 
 function reattachEducation(
-  original: IUserInfo["education"],
-  selected: LLMOutput["education"],
-): IUserInfo["education"] {
+  original: UserInfo["education"],
+  selected: LLMOutput["education"]
+): UserInfo["education"] {
   return selected.map((education) => {
     const educationMatch = original.find(
       (originalEducation) =>
         originalEducation.institution === education.institution &&
-        originalEducation.degree === education.degree,
+        originalEducation.degree === education.degree
     );
 
     if (!educationMatch) {
       throw new Error(
-        `Failed to reattach education id for "${education.institution} - ${education.degree}"`,
+        `Failed to reattach education id for "${education.institution} - ${education.degree}"`
       );
     }
 
     const courses = education.courses.map((course) => {
       const courseMatch = educationMatch.courses.find(
-        (originalCourse) => originalCourse.name === course,
+        (originalCourse) => originalCourse.name === course
       );
 
       if (!courseMatch) {
         throw new Error(
-          `Failed to reattach course id for "${educationMatch.institution} - ${course}"`,
+          `Failed to reattach course id for "${educationMatch.institution} - ${course}"`
         );
       }
 
       return {
-        id: courseMatch.id,
         name: courseMatch.name,
         grade: courseMatch.grade,
         description: courseMatch.description,
@@ -273,7 +269,6 @@ function reattachEducation(
     });
 
     return {
-      id: educationMatch.id,
       degree: educationMatch.degree,
       majors: educationMatch.majors,
       minors: educationMatch.minors,
@@ -288,9 +283,9 @@ function reattachEducation(
 }
 
 function mergeEnhancedContent(
-  original: IUserInfo,
-  enhanced: LLMOutput,
-): IUserInfo {
+  original: UserInfo,
+  enhanced: LLMOutput
+): UserInfo {
   return {
     email: original.email,
     name: original.name,
@@ -311,7 +306,7 @@ function mergeEnhancedContent(
     skills: reattachSkills(original.skills, enhanced.skills),
     experiences: reattachExperiences(
       original.experiences,
-      enhanced.experiences,
+      enhanced.experiences
     ),
     projects: reattachProjects(original.projects, enhanced.projects),
     education: reattachEducation(original.education, enhanced.education),
@@ -320,9 +315,9 @@ function mergeEnhancedContent(
 
 export async function enhanceResumeUserInfoAgent(
   openAIClient: OpenAI,
-  userInfo: IUserInfo,
-  targetJobs?: string[],
-): Promise<IUserInfo> {
+  userInfo: UserInfo,
+  targetJobs?: string[]
+): Promise<UserInfo> {
   const llmInput = toLLMInput(userInfo);
   const prompt = buildPrompt(llmInput, targetJobs);
 

@@ -155,12 +155,12 @@ export async function generateProfessionalHeadshotAgent(
   }
 
   const response = await openAIClient.images.edit({
-    model: "gpt-image-1.5",
+    model: "gpt-image-2",
     image: imageInput,
     prompt,
     size: layout,
+    quality: "medium",
     output_format: "jpeg",
-    input_fidelity: "high",
     output_compression: 75,
   });
 

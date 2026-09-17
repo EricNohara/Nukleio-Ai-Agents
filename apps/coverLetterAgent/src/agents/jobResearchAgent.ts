@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import { IJobInfo, IJobInfoLlmResponse } from "../interfaces/IJobInfo";
+import { JobInfo, JobInfoLlmResponse } from "../types/jobInfo";
 
 function removeEmptyFields<T>(value: T): T {
   if (Array.isArray(value)) {
@@ -139,7 +139,7 @@ export default async function jobResearchAgent(
   jobDescriptionDump: string,
   jobTitle: string,
   companyName: string,
-): Promise<IJobInfo> {
+): Promise<JobInfo> {
   const completion = await clientOpenAI.chat.completions.create({
     model: "gpt-5.4-nano",
     temperature: 0,
@@ -164,16 +164,16 @@ export default async function jobResearchAgent(
     throw new Error("No response from LLM during job info extraction");
   }
 
-  let extracted: IJobInfoLlmResponse;
+  let extracted: JobInfoLlmResponse;
   try {
-    extracted = JSON.parse(rawOutput) as IJobInfoLlmResponse;
+    extracted = JSON.parse(rawOutput) as JobInfoLlmResponse;
   } catch (err) {
     throw new Error(`Failed to parse structured job info JSON: ${String(err)}`);
   }
 
-  const cleaned = removeEmptyFields<IJobInfoLlmResponse>(extracted);
+  const cleaned = removeEmptyFields<JobInfoLlmResponse>(extracted);
 
-  return removeEmptyFields<IJobInfo>({
+  return removeEmptyFields<JobInfo>({
     ...cleaned,
     job_title: jobTitle,
     company: removeEmptyFields({

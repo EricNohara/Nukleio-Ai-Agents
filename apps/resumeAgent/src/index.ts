@@ -1,92 +1,90 @@
 import { APIGatewayProxyHandlerV2 } from "aws-lambda";
-import { runGeneratePipeline, runGenerateWithAiPipeline } from "./pipeline";
 import { z } from "zod";
 
+import { runGeneratePipeline, runGenerateWithAiPipeline } from "./pipeline";
+import { userInfoSchema } from "./schemas/userInfoSchema";
+import {
+  assertAuthorizedUserId,
+  authorizeTrustedAppRequest,
+  TrustedAppConfigurationError,
+  TrustedAppRequestError,
+} from "./utils/trustedAppRequest";
+
+const JSON_HEADERS = {
+  "Cache-Control": "no-store",
+  "Content-Type": "application/json",
+};
+
 const generateResumeSchema = z.object({
-  userId: z.string(),
+  userId: z.string().uuid(),
+  userInfo: userInfoSchema,
   templateId: z.string().optional(),
-  // to include in the resume - if not provided, include all
-  educationIds: z.array(z.string()).optional(),
-  experienceIds: z.array(z.string()).optional(),
-  courseIds: z.array(z.string()).optional(),
-  projectIds: z.array(z.string()).optional(),
-  skillIds: z.array(z.string()).optional(),
+  deliveryMode: z.enum(["cached", "transient"]).default("cached"),
 });
 
-// enhance the user info intelligently and output a template
 const generateResumeWithAiSchema = z.object({
-  userId: z.string(),
+  userId: z.string().uuid(),
+  userInfo: userInfoSchema,
   templateId: z.string().optional(),
-  // list of job types the user is trying to land
   targetJobs: z.array(z.string()).optional(),
-  // LLM determines intelligently which items to include/exclude
+  deliveryMode: z.enum(["cached", "transient"]).default("cached"),
 });
+
+function jsonResponse(statusCode: number, body: unknown) {
+  return {
+    statusCode,
+    headers: JSON_HEADERS,
+    body: JSON.stringify(body),
+  };
+}
 
 export const handler: APIGatewayProxyHandlerV2 = async (event) => {
-  if (event.requestContext.http.method === "OPTIONS") {
-    return {
-      statusCode: 204,
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Headers": "Content-Type",
-        "Access-Control-Allow-Methods": "OPTIONS,POST,GET",
-      },
-    };
+  const route = event.rawPath;
+  const operation =
+    route === "/generate"
+      ? "resume_generate"
+      : route === "/generateAi"
+        ? "resume_generate_ai"
+        : null;
+
+  if (!operation) {
+    return jsonResponse(404, { success: false, error: "Route not found" });
   }
 
   try {
-    const route = event.rawPath;
-    const body = JSON.parse(event.body || "{}");
+    const trustedRequest = authorizeTrustedAppRequest(event, operation);
+    const body: unknown = JSON.parse(event.body || "{}");
 
     if (route === "/generate") {
       const input = generateResumeSchema.parse(body);
-      const result = await runGeneratePipeline(input);
-
-      return {
-        statusCode: 200,
-        headers: {
-          "Access-Control-Allow-Origin": "*",
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(result),
-      };
+      assertAuthorizedUserId(trustedRequest, input.userId);
+      return jsonResponse(200, await runGeneratePipeline(input));
     }
 
-    if (route === "/generateAi") {
-      const input = generateResumeWithAiSchema.parse(body);
-      const result = await runGenerateWithAiPipeline(input);
-
-      return {
-        statusCode: 200,
-        headers: {
-          "Access-Control-Allow-Origin": "*",
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(result),
-      };
-    }
-
-    return {
-      statusCode: 404,
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ success: false, error: "Route not found" }),
-    };
-  } catch (err: any) {
-    console.error(err);
-
-    return {
-      statusCode: 400,
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
+    const input = generateResumeWithAiSchema.parse(body);
+    assertAuthorizedUserId(trustedRequest, input.userId);
+    return jsonResponse(200, await runGenerateWithAiPipeline(input));
+  } catch (error) {
+    if (error instanceof TrustedAppConfigurationError) {
+      console.error("Resume agent authentication is misconfigured:", error);
+      return jsonResponse(500, {
         success: false,
-        error: err?.message ?? "Unknown error",
-      }),
-    };
+        error: "Agent authentication is unavailable",
+      });
+    }
+
+    if (error instanceof TrustedAppRequestError) {
+      console.warn("Rejected unauthorized resume agent request", {
+        requestId: event.requestContext.requestId,
+      });
+      return jsonResponse(403, { success: false, error: "Forbidden" });
+    }
+
+    console.error("Resume agent request failed:", error);
+    const invalidRequest = error instanceof SyntaxError || error instanceof z.ZodError;
+    return jsonResponse(invalidRequest ? 400 : 500, {
+      success: false,
+      error: invalidRequest ? "Invalid request body" : "Agent request failed",
+    });
   }
 };

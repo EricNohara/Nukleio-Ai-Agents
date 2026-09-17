@@ -1,0 +1,21 @@
+{
+  "name": "nukleio-file-compression-agent",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.927.0",
+    "@aws-sdk/s3-presigned-post": "^3.927.0",
+    "pdf-lib": "^1.17.1",
+    "sharp": "^0.34.5",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.157",
+    "@types/node": "^24.10.0",
+    "typescript": "^5.9.3"
+  }
+}

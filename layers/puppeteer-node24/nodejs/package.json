@@ -1,0 +1,10 @@
+{
+  "name": "nukleio-puppeteer-lambda-layer",
+  "version": "3.0.0",
+  "private": true,
+  "description": "Puppeteer and Chromium dependencies for the Node.js 24 AWS Lambda runtime",
+  "dependencies": {
+    "@sparticuz/chromium": "147.0.2",
+    "puppeteer-core": "24.42.0"
+  }
+}
