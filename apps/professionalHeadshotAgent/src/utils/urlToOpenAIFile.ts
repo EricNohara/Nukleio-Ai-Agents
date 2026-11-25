@@ -1,15 +1,7 @@
-import axios from "axios";
 import { toFile } from "openai";
 
 export async function urlToOpenAIFile(url: string, filename: string) {
-  const response = await axios.get<ArrayBuffer>(url, {
-    responseType: "arraybuffer",
-  });
-
-  const contentTypeHeader = response.headers["content-type"];
-  const contentType =
-    typeof contentTypeHeader === "string" ? contentTypeHeader : "image/png";
-  const buffer = Buffer.from(response.data);
-
-  return toFile(buffer, filename, { type: contentType });
+  const match = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(url);
+  if (!match?.[1] || !match[2]) throw new Error("Invalid image data");
+  return toFile(Buffer.from(match[2], "base64"), filename, { type: match[1] });
 }

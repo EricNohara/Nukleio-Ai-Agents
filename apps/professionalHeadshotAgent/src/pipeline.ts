@@ -10,6 +10,7 @@ import getOpenAIClient from "./utils/getOpenAIClient";
 import { uploadHeadshotToSupabase } from "./utils/uploadHeadshotToSupabase";
 import { reviseProfessionalHeadshotAgent } from "./agents/reviseProfessionalHeadshotAgent";
 import { compressGeneratedHeadshot } from "./utils/compressWithFileAgent";
+import { loadHeadshotImage } from "./utils/safeHeadshotImage";
 
 const openAIClient = getOpenAIClient();
 const MAX_HEADSHOT_BYTES = 1024 * 1024;
@@ -31,6 +32,8 @@ export async function runPipeline({
   layout: "1024x1024" | "1536x1024" | "1024x1536" | "auto";
   deliveryMode: "cached" | "transient";
 }) {
+  referenceUrl = await loadHeadshotImage(referenceUrl, userId, "inputs");
+  if (backgroundUrl) backgroundUrl = await loadHeadshotImage(backgroundUrl, userId, "inputs");
   // validate the reference image
   const validation: ReferencePhotoValidationResult =
     await validateReferencePhotoAgent(openAIClient, referenceUrl);
@@ -102,6 +105,7 @@ export async function runRevisionPipeline({
   layout: "1024x1024" | "1536x1024" | "1024x1536" | "auto";
   deliveryMode: "cached" | "transient";
 }) {
+  headshotUrl = await loadHeadshotImage(headshotUrl, userId, "generated");
   // validate the reference image
   const validation: ReferencePhotoValidationResult =
     await validateReferencePhotoAgent(openAIClient, headshotUrl);
