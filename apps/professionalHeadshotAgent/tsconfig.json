@@ -1,30 +1,21 @@
 {
-    "compilerOptions": {
-        "rootDir": "./src",
-        "outDir": "./dist",
-        "target": "ES2020",
-        "module": "CommonJS",
-        "lib": [
-            "ES2020"
-        ],
-        "types": [
-            "node"
-        ],
-        "sourceMap": true,
-        "declaration": true,
-        "strict": true,
-        "noUncheckedIndexedAccess": true,
-        "exactOptionalPropertyTypes": true,
-        "esModuleInterop": true,
-        "moduleResolution": "node",
-        "skipLibCheck": true,
-        "resolveJsonModule": true
-    },
-    "include": [
-        "src/**/*"
-    ],
-    "exclude": [
-        "node_modules",
-        "dist"
-    ]
+  "compilerOptions": {
+    "rootDir": "./src",
+    "outDir": "./dist",
+    "target": "ES2020",
+    "module": "node16",
+    "lib": ["ES2020"],
+    "types": ["node"],
+    "sourceMap": true,
+    "declaration": true,
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "esModuleInterop": true,
+    "moduleResolution": "node16",
+    "skipLibCheck": true,
+    "resolveJsonModule": true
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
 }

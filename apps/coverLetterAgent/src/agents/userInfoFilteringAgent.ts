@@ -1,12 +1,12 @@
 import OpenAI from "openai";
 import { z } from "zod";
 import {
-  IUserInfo,
-  IUserEducation,
-  IUserExperience,
-  IUserProject,
-} from "../interfaces/IUserInfoResponse";
-import { IJobInfo } from "../interfaces/IJobInfo";
+  UserEducation,
+  UserExperience,
+  UserInfo,
+  UserProject,
+} from "../types/userInfo";
+import { JobInfo } from "../types/jobInfo";
 
 type FilterLimits = {
   maxSkills?: number;
@@ -89,7 +89,7 @@ const filteredUserContentSchema = z
 
 type FilteredUserContent = z.infer<typeof filteredUserContentSchema>;
 
-function toLLMInput(userInfo: IUserInfo): LLMInput {
+function toLLMInput(userInfo: UserInfo): LLMInput {
   return {
     skills: userInfo.skills ?? [],
     experiences: (userInfo.experiences ?? []).map((experience) => ({
@@ -141,10 +141,10 @@ Selection limits:
 `.trim();
 }
 
-function buildDataMessage(userData: LLMInput, jobData: IJobInfo): string {
+function buildDataMessage(userInfo: LLMInput, jobData: JobInfo): string {
   return [
     "USER_DATA:",
-    JSON.stringify(userData, null, 2),
+    JSON.stringify(userInfo, null, 2),
     "",
     "JOB_DATA:",
     JSON.stringify(jobData, null, 2),
@@ -174,9 +174,9 @@ function enforceHardLimits(data: FilteredUserContent): FilteredUserContent {
 }
 
 function mergeFilteredContent(
-  original: IUserInfo,
+  original: UserInfo,
   filtered: FilteredUserContent,
-): IUserInfo {
+): UserInfo {
   return {
     name: original.name,
     email: original.email,
@@ -192,27 +192,27 @@ function mergeFilteredContent(
       : {}),
 
     skills: filtered.skills,
-    experiences: filtered.experiences as IUserExperience[],
+    experiences: filtered.experiences as UserExperience[],
     projects: filtered.projects.map((project) => ({
       name: project.name,
       ...(project.tech ? { tech: project.tech } : {}),
       description: project.description,
-    })) as IUserProject[],
+    })) as UserProject[],
     education: filtered.education.map((edu) => ({
       degree: edu.degree,
       institution: edu.institution,
       ...(edu.fields_of_study ? { fields_of_study: edu.fields_of_study } : {}),
       ...(edu.courses ? { courses: edu.courses } : {}),
-    })) as IUserEducation[],
+    })) as UserEducation[],
   };
 }
 
-export async function userDataFilteringAgent(
+export async function userInfoFilteringAgent(
   openAiClient: OpenAI,
-  userData: IUserInfo,
-  jobData: IJobInfo,
-): Promise<IUserInfo> {
-  const llmInput = toLLMInput(userData);
+  userInfo: UserInfo,
+  jobData: JobInfo,
+): Promise<UserInfo> {
+  const llmInput = toLLMInput(userInfo);
 
   const response = await openAiClient.responses.create({
     model: "gpt-5.4-mini",
@@ -324,5 +324,5 @@ export async function userDataFilteringAgent(
   const parsed = filteredUserContentSchema.parse(JSON.parse(raw));
   const constrained = enforceHardLimits(parsed);
 
-  return mergeFilteredContent(userData, constrained);
+  return mergeFilteredContent(userInfo, constrained);
 }

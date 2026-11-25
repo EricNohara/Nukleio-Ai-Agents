@@ -1,10 +1,12 @@
 import {
   writingAnalysisSchema,
+  qualitativeSchema,
+} from "../schemas/writingSchema";
+import {
   WritingAnalysis,
   QuantitativeMetrics,
   QualitativeMetrics,
-  qualitativeSchema,
-} from "../utils/writing/writingSchema";
+} from "../types/writingAnalysis";
 import "dotenv/config";
 import cleanLLMOutput from "../utils/ai/cleanLLMResponse";
 import OpenAI from "openai";

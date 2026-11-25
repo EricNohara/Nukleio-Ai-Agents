@@ -1,11 +1,11 @@
 import OpenAI from "openai";
-import { IUserInfo } from "../interfaces/IUserInfoResponse";
-import { IJobInfo } from "../interfaces/IJobInfo";
-import { WritingAnalysis } from "../utils/writing/writingSchema";
+import { WritingAnalysis } from "../types/writingAnalysis";
+import { UserInfo } from "../types/userInfo";
+import { JobInfo } from "../types/jobInfo";
 
 function buildPrompt(
-  userData: IUserInfo,
-  jobData: IJobInfo,
+  userInfo: UserInfo,
+  jobData: JobInfo,
   writingAnalysis: WritingAnalysis | null,
   writingSample: string | null,
   draft: string,
@@ -40,7 +40,7 @@ function buildPrompt(
     - Paragraph count: 3 - 5 paragraphs
 
     USER_DATA:
-    ${JSON.stringify(userData, null, 2)}
+    ${JSON.stringify(userInfo, null, 2)}
 
     JOB_DATA:
     ${JSON.stringify(jobData, null, 2)}
@@ -63,15 +63,15 @@ function buildPrompt(
 
 export default async function userRevisionAgent(
   clientOpenAI: OpenAI,
-  userData: IUserInfo,
-  jobData: IJobInfo,
+  userInfo: UserInfo,
+  jobData: JobInfo,
   writingAnalysis: WritingAnalysis | null,
   writingSample: string | null,
   draft: string,
   feedback: string,
 ): Promise<string> {
   const prompt = buildPrompt(
-    userData,
+    userInfo,
     jobData,
     writingAnalysis,
     writingSample,

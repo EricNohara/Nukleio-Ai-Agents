@@ -1,6 +1,6 @@
 import OpenAI from "openai";
-import { IUserInfo } from "../interfaces/IUserInfoResponse";
-import { IJobInfo } from "../interfaces/IJobInfo";
+import { UserInfo } from "../types/userInfo";
+import { JobInfo } from "../types/jobInfo";
 
 type MatchBreakdownLLM = {
   education: number;
@@ -91,10 +91,10 @@ function buildPrompt(): string {
   `.trim();
 }
 
-function buildDataMessage(userData: IUserInfo, jobData: IJobInfo): string {
+function buildDataMessage(userInfo: UserInfo, jobData: JobInfo): string {
   return [
     "USER_DATA:",
-    JSON.stringify(userData, null, 2),
+    JSON.stringify(userInfo, null, 2),
     "",
     "JOB_DATA:",
     JSON.stringify(jobData, null, 2),
@@ -103,8 +103,8 @@ function buildDataMessage(userData: IUserInfo, jobData: IJobInfo): string {
 
 export default async function skillsMatchEvaluatorAgent(
   clientOpenAI: OpenAI,
-  userData: IUserInfo,
-  jobData: IJobInfo,
+  userInfo: UserInfo,
+  jobData: JobInfo,
 ): Promise<MatchBreakdown> {
   const response = await clientOpenAI.responses.create({
     model: "gpt-5.4-mini",
@@ -124,7 +124,7 @@ export default async function skillsMatchEvaluatorAgent(
         content: [
           {
             type: "input_text",
-            text: buildDataMessage(userData, jobData),
+            text: buildDataMessage(userInfo, jobData),
           },
         ],
       },

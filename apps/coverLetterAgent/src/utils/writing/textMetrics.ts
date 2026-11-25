@@ -1,4 +1,5 @@
-import { quantitativeSchema, QuantitativeMetrics } from "./writingSchema";
+import { quantitativeSchema } from "../../schemas/writingSchema";
+import { QuantitativeMetrics } from "../../types/writingAnalysis";
 
 // --- basic utils ---
 function countWords(text: string): number {
@@ -34,7 +35,7 @@ function totalSyllables(text: string): number {
 function fleschKincaidGrade(
   words: number,
   sentences: number,
-  syllables: number
+  syllables: number,
 ) {
   return 0.39 * (words / sentences) + 11.8 * (syllables / words) - 15.59;
 }

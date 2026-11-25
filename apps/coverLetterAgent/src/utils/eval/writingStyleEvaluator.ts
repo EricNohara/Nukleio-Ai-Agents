@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import { WritingAnalysis } from "../writing/writingSchema";
+import { WritingAnalysis } from "../../types/writingAnalysis";
 import writingAnalysisAgent from "../../agents/writingAnalysisAgent";
 import { IWritingStyleEvaluationResult } from "../../interfaces/IEvaluator";
 

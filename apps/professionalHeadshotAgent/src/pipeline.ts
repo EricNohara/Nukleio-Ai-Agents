@@ -9,22 +9,31 @@ import {
 import getOpenAIClient from "./utils/getOpenAIClient";
 import { uploadHeadshotToSupabase } from "./utils/uploadHeadshotToSupabase";
 import { reviseProfessionalHeadshotAgent } from "./agents/reviseProfessionalHeadshotAgent";
+import { compressGeneratedHeadshot } from "./utils/compressWithFileAgent";
+import { loadHeadshotImage } from "./utils/safeHeadshotImage";
 
 const openAIClient = getOpenAIClient();
+const MAX_HEADSHOT_BYTES = 1024 * 1024;
 
 export async function runPipeline({
+  userId,
   referenceUrl,
   backgroundDescription,
   backgroundUrl,
   attire,
   layout,
+  deliveryMode,
 }: {
+  userId: string;
   referenceUrl: string;
   backgroundDescription: string | null;
   backgroundUrl?: string | undefined;
   attire: HeadshotAttire;
   layout: "1024x1024" | "1536x1024" | "1024x1536" | "auto";
+  deliveryMode: "cached" | "transient";
 }) {
+  referenceUrl = await loadHeadshotImage(referenceUrl, userId, "inputs");
+  if (backgroundUrl) backgroundUrl = await loadHeadshotImage(backgroundUrl, userId, "inputs");
   // validate the reference image
   const validation: ReferencePhotoValidationResult =
     await validateReferencePhotoAgent(openAIClient, referenceUrl);
@@ -61,10 +70,18 @@ export async function runPipeline({
   }
 
   const imageBuffer = Buffer.from(b64Image, "base64");
+  if (deliveryMode === "transient") {
+    return { success: true, imageBase64: b64Image, contentType: "image/jpeg", validation };
+  }
 
-  const publicUrl = await uploadHeadshotToSupabase(imageBuffer, {
-    prefix: "generated",
-    contentType: "image/jpeg",
+  const compressedHeadshot = await compressGeneratedHeadshot(imageBuffer);
+  if (compressedHeadshot.bytes.length > MAX_HEADSHOT_BYTES) {
+    throw new Error("Generated headshot exceeds the 1 MB storage limit after compression");
+  }
+
+  const publicUrl = await uploadHeadshotToSupabase(compressedHeadshot.bytes, {
+    userId,
+    contentType: compressedHeadshot.contentType,
   });
 
   // return the public url
@@ -76,14 +93,19 @@ export async function runPipeline({
 }
 
 export async function runRevisionPipeline({
+  userId,
   headshotUrl,
   feedback,
   layout,
+  deliveryMode,
 }: {
+  userId: string;
   headshotUrl: string;
   feedback: string;
   layout: "1024x1024" | "1536x1024" | "1024x1536" | "auto";
+  deliveryMode: "cached" | "transient";
 }) {
+  headshotUrl = await loadHeadshotImage(headshotUrl, userId, "generated");
   // validate the reference image
   const validation: ReferencePhotoValidationResult =
     await validateReferencePhotoAgent(openAIClient, headshotUrl);
@@ -118,10 +140,18 @@ export async function runRevisionPipeline({
   }
 
   const imageBuffer = Buffer.from(b64Image, "base64");
+  if (deliveryMode === "transient") {
+    return { success: true, imageBase64: b64Image, contentType: "image/jpeg", validation };
+  }
 
-  const publicUrl = await uploadHeadshotToSupabase(imageBuffer, {
-    prefix: "generated",
-    contentType: "image/jpeg",
+  const compressedHeadshot = await compressGeneratedHeadshot(imageBuffer);
+  if (compressedHeadshot.bytes.length > MAX_HEADSHOT_BYTES) {
+    throw new Error("Generated headshot exceeds the 1 MB storage limit after compression");
+  }
+
+  const publicUrl = await uploadHeadshotToSupabase(compressedHeadshot.bytes, {
+    userId,
+    contentType: compressedHeadshot.contentType,
   });
 
   // return the public url

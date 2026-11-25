@@ -1,14 +1,22 @@
 import { APIGatewayProxyHandlerV2 } from "aws-lambda";
-import { runPipeline, runRevisionPipeline } from "./pipeline";
-
 import { z } from "zod";
 
-const headshotSizeSchema = z.enum([
-  "1024x1024",
-  "1536x1024",
-  "1024x1536",
-  "auto",
-]);
+import { runPipeline, runRevisionPipeline } from "./pipeline";
+import {
+  assertAuthorizedUserId,
+  authorizeTrustedAppRequest,
+  TrustedAppConfigurationError,
+  TrustedAppRequestError,
+} from "./utils/trustedAppRequest";
+
+const JSON_HEADERS = {
+  "Cache-Control": "no-store",
+  "Content-Type": "application/json",
+};
+
+const headshotSizeSchema = z
+  .enum(["1024x1024", "1536x1024", "1024x1536", "auto"])
+  .default("1024x1024");
 
 const headshotAttireSchema = z.enum([
   "auto",
@@ -19,69 +27,82 @@ const headshotAttireSchema = z.enum([
   "techProfessional",
   "academic",
 ]);
+// Default preserves compatibility while the app and Lambda roll out separately.
+const deliveryModeSchema = z.enum(["cached", "transient"]).default("cached");
 
 const generateProfessionalHeadshotSchema = z.object({
+  userId: z.string().uuid(),
   referenceUrl: z.string(),
   backgroundDescription: z.string().nullable(),
   backgroundUrl: z.string().optional(),
   attire: headshotAttireSchema,
   layout: headshotSizeSchema,
+  deliveryMode: deliveryModeSchema,
 });
 
 const reviseProfessionalHeadshotSchema = z.object({
+  userId: z.string().uuid(),
   headshotUrl: z.string(),
   feedback: z.string(),
   layout: headshotSizeSchema,
+  deliveryMode: deliveryModeSchema,
 });
 
+function jsonResponse(statusCode: number, body: unknown) {
+  return {
+    statusCode,
+    headers: JSON_HEADERS,
+    body: JSON.stringify(body),
+  };
+}
+
 export const handler: APIGatewayProxyHandlerV2 = async (event) => {
-  // Handle preflight CORS
-  if (event.requestContext.http.method === "OPTIONS") {
-    return {
-      statusCode: 204,
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Headers": "Content-Type",
-        "Access-Control-Allow-Methods": "OPTIONS,POST,GET",
-      },
-    };
+  const route = event.rawPath;
+  const operation =
+    route === "/generate"
+      ? "headshot_generate"
+      : route === "/revise"
+        ? "headshot_revise"
+        : null;
+
+  if (!operation) {
+    return jsonResponse(404, { success: false, error: "Route not found" });
   }
 
   try {
-    const route = event.rawPath;
-
-    const body = JSON.parse(event.body || "{}");
+    const trustedRequest = authorizeTrustedAppRequest(event, operation);
+    const body: unknown = JSON.parse(event.body || "{}");
 
     if (route === "/generate") {
       const input = generateProfessionalHeadshotSchema.parse(body);
-      const result = await runPipeline(input);
-      return {
-        statusCode: 200,
-        headers: { "Access-Control-Allow-Origin": "*" },
-        body: JSON.stringify(result),
-      };
+      assertAuthorizedUserId(trustedRequest, input.userId);
+      return jsonResponse(200, await runPipeline(input));
     }
 
-    if (route === "/revise") {
-      const input = reviseProfessionalHeadshotSchema.parse(body);
-      const result = await runRevisionPipeline(input);
-      return {
-        statusCode: 200,
-        headers: { "Access-Control-Allow-Origin": "*" },
-        body: JSON.stringify(result),
-      };
+    const input = reviseProfessionalHeadshotSchema.parse(body);
+    assertAuthorizedUserId(trustedRequest, input.userId);
+    return jsonResponse(200, await runRevisionPipeline(input));
+  } catch (error) {
+    if (error instanceof TrustedAppConfigurationError) {
+      console.error("Headshot agent authentication is misconfigured:", error);
+      return jsonResponse(500, {
+        success: false,
+        error: "Agent authentication is unavailable",
+      });
     }
 
-    return {
-      statusCode: 404,
-      headers: { "Access-Control-Allow-Origin": "*" },
-      body: JSON.stringify({ success: false, error: "Route not found" }),
-    };
-  } catch (err: any) {
-    return {
-      statusCode: 400,
-      headers: { "Access-Control-Allow-Origin": "*" },
-      body: JSON.stringify({ success: false, error: err.message }),
-    };
+    if (error instanceof TrustedAppRequestError) {
+      console.warn("Rejected unauthorized headshot agent request", {
+        requestId: event.requestContext.requestId,
+      });
+      return jsonResponse(403, { success: false, error: "Forbidden" });
+    }
+
+    console.error("Headshot agent request failed:", error);
+    const invalidRequest = error instanceof SyntaxError || error instanceof z.ZodError;
+    return jsonResponse(invalidRequest ? 400 : 500, {
+      success: false,
+      error: invalidRequest ? "Invalid request body" : "Agent request failed",
+    });
   }
 };

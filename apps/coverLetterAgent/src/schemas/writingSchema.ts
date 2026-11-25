@@ -9,8 +9,6 @@ export const quantitativeSchema = z.object({
   textStandard: z.number(),
 });
 
-export type QuantitativeMetrics = z.infer<typeof quantitativeSchema>;
-
 // qualitative metrics
 export const qualitativeSchema = z.object({
   tone: z.object({
@@ -28,12 +26,8 @@ export const qualitativeSchema = z.object({
   }),
 });
 
-export type QualitativeMetrics = z.infer<typeof qualitativeSchema>;
-
-// combined
+// combined qualitative and quantitative
 export const writingAnalysisSchema = z.intersection(
   quantitativeSchema,
-  qualitativeSchema
+  qualitativeSchema,
 );
-
-export type WritingAnalysis = z.infer<typeof writingAnalysisSchema>;
